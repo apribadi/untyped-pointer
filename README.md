@@ -1,3 +1,3 @@
 # ptr-monotype
 
-A pointer type without mutability or pointee type information.
+A pointer type without pointee type or mutability information.
