@@ -5,6 +5,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(elided_lifetimes_in_paths)]
 #![warn(non_ascii_idents)]
+#![warn(trivial_casts)]
 #![warn(trivial_numeric_casts)]
 #![warn(unreachable_pub)]
 #![warn(unused_lifetimes)]
@@ -22,8 +23,13 @@ impl ptr {
   pub const NULL: Self = Self::invalid(0);
 
   #[inline(always)]
+  pub const fn new<T: ?Sized>(x: *const T) -> Self {
+    Self(x as *const ())
+  }
+
+  #[inline(always)]
   pub const fn invalid(addr: usize) -> Self {
-    Self(unsafe { core::mem::transmute::<usize, *const ()>(addr) })
+    Self::new(unsafe { core::mem::transmute::<usize, *const ()>(addr) })
   }
 
   #[inline(always)]
@@ -72,22 +78,22 @@ impl ptr {
   }
 
   #[inline(always)]
-  pub fn as_typed_ptr<T>(self) -> *const T {
+  pub const fn as_typed_ptr<T>(self) -> *const T {
     self.0 as *const T
   }
 
   #[inline(always)]
-  pub fn as_typed_mut_ptr<T>(self) -> *mut T {
+  pub const fn as_typed_mut_ptr<T>(self) -> *mut T {
     self.as_typed_ptr::<T>() as *mut T
   }
 
   #[inline(always)]
-  pub fn as_slice_ptr<T>(self, len: usize) -> *const [T] {
+  pub const fn as_slice_ptr<T>(self, len: usize) -> *const [T] {
     core::ptr::slice_from_raw_parts(self.as_typed_ptr(), len)
   }
 
   #[inline(always)]
-  pub fn as_slice_mut_ptr<T>(self, len: usize) -> *mut [T] {
+  pub const fn as_slice_mut_ptr<T>(self, len: usize) -> *mut [T] {
     self.as_slice_ptr::<T>(len) as *mut [T]
   }
 
@@ -114,13 +120,13 @@ impl ptr {
   #[cfg(feature = "alloc")]
   #[inline(always)]
   pub unsafe fn alloc(layout: alloc::alloc::Layout) -> Self {
-    unsafe { Self::from(alloc::alloc::alloc(layout)) }
+    unsafe { Self::new(alloc::alloc::alloc(layout)) }
   }
 
   #[cfg(feature = "alloc")]
   #[inline(always)]
   pub unsafe fn alloc_zeroed(layout: alloc::alloc::Layout) -> Self {
-    unsafe { Self::from(alloc::alloc::alloc_zeroed(layout)) }
+    unsafe { Self::new(alloc::alloc::alloc_zeroed(layout)) }
   }
 
   #[cfg(feature = "alloc")]
@@ -130,26 +136,12 @@ impl ptr {
   }
 }
 
-impl<T: ?Sized> From<*const T> for ptr {
-  #[inline(always)]
-  fn from(value: *const T) -> Self {
-    Self(value as *const ())
-  }
-}
-
-impl<T: ?Sized> From<*mut T> for ptr {
-  #[inline(always)]
-  fn from(value: *mut T) -> Self {
-    Self::from(value as *const _)
-  }
-}
-
 impl core::ops::Add<usize> for ptr {
   type Output = Self;
 
   #[inline(always)]
   fn add(self, rhs: usize) -> Self::Output {
-    Self::from(self.as_typed_ptr::<u8>().wrapping_add(rhs))
+    Self::new(self.as_typed_ptr::<u8>().wrapping_add(rhs))
   }
 }
 
@@ -165,7 +157,7 @@ impl core::ops::Sub<usize> for ptr {
 
   #[inline(always)]
   fn sub(self, rhs: usize) -> Self::Output {
-    Self::from(self.as_typed_ptr::<u8>().wrapping_sub(rhs))
+    Self::new(self.as_typed_ptr::<u8>().wrapping_sub(rhs))
   }
 }
 
