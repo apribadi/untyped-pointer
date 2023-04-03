@@ -1,0 +1,15 @@
+[package]
+name = "ptr-monotype"
+version = "0.2.0"
+authors = ["Aaron Pribadi <aaron.pribadi@gmail.com>"]
+license = "Artistic-2.0"
+edition = "2021"
+categories = ["no-std", "rust-patterns"]
+description = "a pointer type without mutability or pointee type information"
+
+[dev-dependencies]
+expect-test = "1.4.0"
+
+[features]
+default = ["alloc"]
+alloc = []
