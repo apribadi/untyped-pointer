@@ -14,11 +14,6 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[inline(always)]
-fn convert<T, U: From<T>>(value: T) -> U {
-  U::from(value)
-}
-
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct ptr(*const ());
@@ -39,7 +34,7 @@ impl ptr {
   #[inline(always)]
   pub fn addr(self) -> usize {
     // NB: not const
-    let x = convert(self);
+    let x = self.as_ptr();
     unsafe { core::mem::transmute::<*const (), usize>(x) }
   }
 
@@ -49,66 +44,104 @@ impl ptr {
   }
 
   #[inline(always)]
+  pub const fn add(self, offset: usize) -> Self {
+    Self::new(self.as_ptr::<u8>().wrapping_add(offset))
+  }
+
+  #[inline(always)]
+  pub const fn sub(self, offset: usize) -> Self {
+    Self::new(self.as_ptr::<u8>().wrapping_sub(offset))
+  }
+
+  #[inline(always)]
+  pub fn diff(self, base: Self) -> usize {
+    self.addr().wrapping_sub(base.addr())
+  }
+
+  #[inline(always)]
+  pub fn mask(self, mask: usize) -> Self {
+    self.sub(self.addr() & ! mask)
+  }
+
+  #[inline(always)]
   pub unsafe fn get<T>(self) -> T {
-    let x = convert(self);
+    let x = self.as_ptr();
     unsafe { core::ptr::read(x) }
   }
 
   #[inline(always)]
   pub unsafe fn set<T>(self, value: T) {
-    let x = convert(self);
+    let x = self.as_mut_ptr();
     unsafe { core::ptr::write(x, value) }
   }
 
   #[inline(always)]
   pub unsafe fn replace<T>(self, value: T) -> T {
-    let x = convert(self);
+    let x = self.as_mut_ptr();
     unsafe { core::ptr::replace(x, value) }
   }
 
   #[inline(always)]
   pub unsafe fn copy_nonoverlapping<T>(src: Self, dst: Self, count: usize) {
-    let src = convert(src);
-    let dst = convert(dst);
+    let src = src.as_ptr();
+    let dst = dst.as_mut_ptr();
     unsafe { core::ptr::copy_nonoverlapping::<T>(src, dst, count) };
   }
 
   #[inline(always)]
   pub unsafe fn swap_nonoverlapping<T>(x: Self, y: Self, count: usize) {
-    let x = convert(x);
-    let y = convert(y);
+    let x = x.as_mut_ptr();
+    let y = y.as_mut_ptr();
     unsafe { core::ptr::swap_nonoverlapping::<T>(x, y, count) };
   }
 
   #[inline(always)]
   pub unsafe fn drop_in_place<T>(self) {
-    let x = convert(self);
+    let x = self.as_mut_ptr();
     unsafe { core::ptr::drop_in_place::<T>(x) }
   }
 
   #[inline(always)]
-  pub unsafe fn as_ref<'a, T>(self) -> &'a T {
-    let x = convert::<_, *const T>(self);
+  pub const fn as_ptr<T>(self) -> *const T {
+    self.0 as *const T
+  }
+
+  #[inline(always)]
+  pub const fn as_mut_ptr<T>(self) -> *mut T {
+    self.as_ptr::<T>() as *mut T
+  }
+
+  #[inline(always)]
+  pub const fn as_slice_ptr<T>(self, len: usize) -> *const [T] {
+    core::ptr::slice_from_raw_parts(self.as_ptr(), len)
+  }
+
+  #[inline(always)]
+  pub const fn as_slice_mut_ptr<T>(self, len: usize) -> *mut [T] {
+    self.as_slice_ptr::<T>(len) as *mut [T]
+  }
+
+  #[inline(always)]
+  pub const unsafe fn as_ref<'a, T>(self) -> &'a T {
+    let x = self.as_ptr();
     unsafe { &*x }
   }
 
   #[inline(always)]
   pub unsafe fn as_mut_ref<'a, T>(self) -> &'a mut T {
-    let x = convert::<_, *mut T>(self);
+    let x = self.as_mut_ptr();
     unsafe { &mut *x }
   }
 
   #[inline(always)]
-  pub unsafe fn as_slice_ref<'a, T>(self, len: usize) -> &'a [T] {
-    let x = convert(self);
-    let x = core::ptr::slice_from_raw_parts(x, len);
+  pub const unsafe fn as_slice_ref<'a, T>(self, len: usize) -> &'a [T] {
+    let x = self.as_slice_ptr(len);
     unsafe { &*x }
   }
 
   #[inline(always)]
   pub unsafe fn as_slice_mut_ref<'a, T>(self, len: usize) -> &'a mut [T] {
-    let x = convert(self);
-    let x = core::ptr::slice_from_raw_parts_mut(x, len);
+    let x = self.as_slice_mut_ptr(len);
     unsafe { &mut *x }
   }
 
@@ -127,7 +160,7 @@ impl ptr {
   #[cfg(feature = "alloc")]
   #[inline(always)]
   pub unsafe fn dealloc(x: Self, layout: alloc::alloc::Layout) {
-    let x = convert(x);
+    let x = x.as_mut_ptr();
     unsafe { alloc::alloc::dealloc(x, layout) }
   }
 }
@@ -170,14 +203,14 @@ impl<T: ?Sized> From<core::ptr::NonNull<T>> for ptr {
 impl<T> From<ptr> for *const T {
   #[inline(always)]
   fn from(value: ptr) -> *const T {
-    value.0 as *const T
+    value.as_ptr()
   }
 }
 
 impl<T> From<ptr> for *mut T {
   #[inline(always)]
   fn from(value: ptr) -> *mut T {
-    value.0 as *mut T
+    value.as_mut_ptr()
   }
 }
 
@@ -186,7 +219,7 @@ impl core::ops::Add<usize> for ptr {
 
   #[inline(always)]
   fn add(self, rhs: usize) -> Self::Output {
-    Self::new(convert::<_, *const u8>(self).wrapping_add(rhs))
+    self.add(rhs)
   }
 }
 
@@ -202,7 +235,7 @@ impl core::ops::Sub<usize> for ptr {
 
   #[inline(always)]
   fn sub(self, rhs: usize) -> Self::Output {
-    Self::new(convert::<_, *const u8>(self).wrapping_sub(rhs))
+    self.sub(rhs)
   }
 }
 
@@ -218,7 +251,7 @@ impl core::ops::Sub<ptr> for ptr {
 
   #[inline(always)]
   fn sub(self, rhs: Self) -> Self::Output {
-    self.addr().wrapping_sub(rhs.addr())
+    self.diff(rhs)
   }
 }
 
@@ -227,7 +260,7 @@ impl core::ops::BitAnd<usize> for ptr {
 
   #[inline(always)]
   fn bitand(self, rhs: usize) -> Self::Output {
-    self - (self.addr() & ! rhs)
+    self.mask(rhs)
   }
 }
 
