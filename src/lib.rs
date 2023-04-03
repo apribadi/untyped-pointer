@@ -119,20 +119,20 @@ impl ptr {
 
   #[cfg(feature = "alloc")]
   #[inline(always)]
-  pub unsafe fn alloc(self, layout: alloc::alloc::Layout) -> Self {
+  pub unsafe fn alloc(layout: alloc::alloc::Layout) -> Self {
     unsafe { Self::new(alloc::alloc::alloc(layout)) }
   }
 
   #[cfg(feature = "alloc")]
   #[inline(always)]
-  pub unsafe fn alloc_zeroed(self, layout: alloc::alloc::Layout) -> Self {
+  pub unsafe fn alloc_zeroed(layout: alloc::alloc::Layout) -> Self {
     unsafe { Self::new(alloc::alloc::alloc_zeroed(layout)) }
   }
 
   #[cfg(feature = "alloc")]
   #[inline(always)]
-  pub unsafe fn dealloc(self, layout: alloc::alloc::Layout) {
-    unsafe { alloc::alloc::dealloc(self.as_typed_mut_ptr(), layout) }
+  pub unsafe fn dealloc(x: Self, layout: alloc::alloc::Layout) {
+    unsafe { alloc::alloc::dealloc(x.as_typed_mut_ptr(), layout) }
   }
 }
 
