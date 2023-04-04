@@ -16,7 +16,7 @@ extern crate alloc;
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
-pub struct ptr(*mut ());
+pub struct ptr(*const ());
 
 unsafe impl Send for ptr {}
 
@@ -26,13 +26,8 @@ impl ptr {
   pub const NULL: Self = Self::invalid(0);
 
   #[inline(always)]
-  pub const fn new<T: ?Sized>(x: *const T) -> Self {
-    Self(x as *const () as *mut ())
-  }
-
-  #[inline(always)]
   pub const fn invalid(addr: usize) -> Self {
-    Self::new(unsafe { core::mem::transmute::<usize, *const ()>(addr) })
+    Self(unsafe { core::mem::transmute::<usize, *const ()>(addr) })
   }
 
   #[inline(always)]
@@ -49,12 +44,12 @@ impl ptr {
 
   #[inline(always)]
   pub const fn add(self, offset: usize) -> Self {
-    Self::new(self.as_ptr::<u8>().wrapping_add(offset))
+    Self(self.as_ptr::<u8>().wrapping_add(offset) as *const ())
   }
 
   #[inline(always)]
   pub const fn sub(self, offset: usize) -> Self {
-    Self::new(self.as_ptr::<u8>().wrapping_sub(offset))
+    Self(self.as_ptr::<u8>().wrapping_sub(offset) as *const ())
   }
 
   #[inline(always)]
@@ -112,7 +107,7 @@ impl ptr {
 
   #[inline(always)]
   pub const fn as_mut_ptr<T>(self) -> *mut T {
-    self.as_ptr::<T>() as *mut T
+    self.0 as *const T as *mut T
   }
 
   #[inline(always)]
@@ -152,13 +147,13 @@ impl ptr {
   #[cfg(feature = "alloc")]
   #[inline(always)]
   pub unsafe fn alloc(layout: alloc::alloc::Layout) -> Self {
-    Self::new(unsafe { alloc::alloc::alloc(layout) })
+    Self(unsafe { alloc::alloc::alloc(layout) } as *const ())
   }
 
   #[cfg(feature = "alloc")]
   #[inline(always)]
   pub unsafe fn alloc_zeroed(layout: alloc::alloc::Layout) -> Self {
-    Self::new(unsafe { alloc::alloc::alloc_zeroed(layout) })
+    Self(unsafe { alloc::alloc::alloc_zeroed(layout) } as *const ())
   }
 
   #[cfg(feature = "alloc")]
@@ -172,35 +167,35 @@ impl ptr {
 impl<T: ?Sized> From<*const T> for ptr {
   #[inline(always)]
   fn from(value: *const T) -> Self {
-    Self::new(value)
+    Self(value as *const ())
   }
 }
 
 impl<T: ?Sized> From<*mut T> for ptr {
   #[inline(always)]
   fn from(value: *mut T) -> Self {
-    Self::new(value)
+    Self(value as *const T as *const ())
   }
 }
 
 impl<T: ?Sized> From<&T> for ptr {
   #[inline(always)]
   fn from(value: &T) -> Self {
-    Self::new(value)
+    Self(value as *const T as *const ())
   }
 }
 
 impl<T: ?Sized> From<&mut T> for ptr {
   #[inline(always)]
   fn from(value: &mut T) -> Self {
-    Self::new(value)
+    Self(value as *mut T as *const T as *const ())
   }
 }
 
 impl<T: ?Sized> From<core::ptr::NonNull<T>> for ptr {
   #[inline(always)]
   fn from(value: core::ptr::NonNull<T>) -> Self {
-    Self::new(value.as_ptr())
+    Self(value.as_ptr() as *const T as *const ())
   }
 }
 
