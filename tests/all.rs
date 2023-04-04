@@ -1,5 +1,5 @@
 use expect_test::expect;
-use ptr_type::*;
+use ptr_monotype::ptr;
 
 #[test]
 fn test_debug() {

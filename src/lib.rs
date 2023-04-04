@@ -18,6 +18,10 @@ extern crate alloc;
 #[repr(transparent)]
 pub struct ptr(*const ());
 
+unsafe impl Send for ptr {}
+
+unsafe impl Sync for ptr {}
+
 impl ptr {
   pub const NULL: Self = Self::invalid(0);
 
@@ -40,7 +44,7 @@ impl ptr {
 
   #[inline(always)]
   pub fn is_null(self) -> bool {
-    self == Self::NULL
+    self.addr() == 0
   }
 
   #[inline(always)]
