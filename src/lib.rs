@@ -16,7 +16,7 @@ extern crate alloc;
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
-pub struct ptr(*const ());
+pub struct ptr(*mut ());
 
 unsafe impl Send for ptr {}
 
@@ -27,7 +27,7 @@ impl ptr {
 
   #[inline(always)]
   pub const fn new<T: ?Sized>(x: *const T) -> Self {
-    Self(x as *const ())
+    Self(x as *const () as *mut ())
   }
 
   #[inline(always)]
