@@ -11,9 +11,6 @@
 #![warn(unused_qualifications)]
 #![warn(unused_results)]
 
-#[cfg(feature = "alloc")]
-extern crate alloc;
-
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct ptr(*const ());
@@ -31,10 +28,35 @@ impl ptr {
   }
 
   #[inline(always)]
+  pub fn from_const_ptr<T: ?Sized>(p: *const T) -> Self {
+    Self(p as *const ())
+  }
+
+  #[inline(always)]
+  pub fn from_mut_ptr<T: ?Sized>(p: *mut T) -> Self {
+    Self(p as *const T as *const ())
+  }
+
+  #[inline(always)]
+  pub fn from_ref<T: ?Sized>(p: &T) -> Self {
+    Self(p as *const T as *const ())
+  }
+
+  #[inline(always)]
+  pub fn from_mut_ref<T: ?Sized>(p: &mut T) -> Self {
+    Self(p as *mut T as *const T as *const ())
+  }
+
+  #[inline(always)]
+  pub fn from_non_null<T: ?Sized>(p: core::ptr::NonNull<T>) -> Self {
+    Self(p.as_ptr() as *const T as *const ())
+  }
+
+  #[inline(always)]
   pub fn addr(self) -> usize {
-    // NB: not const
-    let x = self.as_ptr();
-    unsafe { core::mem::transmute::<*const (), usize>(x) }
+    // NB: The `addr` method should not be `const`.
+    let p = self.as_const_ptr();
+    unsafe { core::mem::transmute::<*const (), usize>(p) }
   }
 
   #[inline(always)]
@@ -44,12 +66,12 @@ impl ptr {
 
   #[inline(always)]
   pub const fn add(self, offset: usize) -> Self {
-    Self(self.as_ptr::<u8>().wrapping_add(offset) as *const ())
+    Self(self.as_const_ptr::<u8>().wrapping_add(offset) as *const ())
   }
 
   #[inline(always)]
   pub const fn sub(self, offset: usize) -> Self {
-    Self(self.as_ptr::<u8>().wrapping_sub(offset) as *const ())
+    Self(self.as_const_ptr::<u8>().wrapping_sub(offset) as *const ())
   }
 
   #[inline(always)]
@@ -63,45 +85,57 @@ impl ptr {
   }
 
   #[inline(always)]
-  pub unsafe fn get<T>(self) -> T {
-    let x = self.as_ptr();
-    unsafe { core::ptr::read(x) }
+  pub unsafe fn read<T>(p: Self) -> T {
+    let p = p.as_const_ptr();
+    unsafe { core::ptr::read(p) }
   }
 
   #[inline(always)]
-  pub unsafe fn set<T>(self, value: T) {
-    let x = self.as_mut_ptr();
-    unsafe { core::ptr::write(x, value) }
+  pub unsafe fn read_unaligned<T>(p: Self) -> T {
+    let p = p.as_const_ptr();
+    unsafe { core::ptr::read_unaligned(p) }
   }
 
   #[inline(always)]
-  pub unsafe fn replace<T>(self, value: T) -> T {
-    let x = self.as_mut_ptr();
-    unsafe { core::ptr::replace(x, value) }
+  pub unsafe fn write<T>(p: Self, value: T) {
+    let p = p.as_mut_ptr();
+    unsafe { core::ptr::write(p, value) }
+  }
+
+  #[inline(always)]
+  pub unsafe fn write_unaligned<T>(p: Self, value: T) {
+    let p = p.as_mut_ptr();
+    unsafe { core::ptr::write_unaligned(p, value) }
+  }
+
+  #[inline(always)]
+  pub unsafe fn replace<T>(p: Self, value: T) -> T {
+    let p = p.as_mut_ptr();
+    unsafe { core::ptr::replace(p, value) }
   }
 
   #[inline(always)]
   pub unsafe fn copy_nonoverlapping<T>(src: Self, dst: Self, count: usize) {
-    let src = src.as_ptr();
+    let src = src.as_const_ptr();
     let dst = dst.as_mut_ptr();
     unsafe { core::ptr::copy_nonoverlapping::<T>(src, dst, count) };
   }
 
   #[inline(always)]
-  pub unsafe fn swap_nonoverlapping<T>(x: Self, y: Self, count: usize) {
-    let x = x.as_mut_ptr();
-    let y = y.as_mut_ptr();
-    unsafe { core::ptr::swap_nonoverlapping::<T>(x, y, count) };
+  pub unsafe fn swap_nonoverlapping<T>(p: Self, q: Self, count: usize) {
+    let p = p.as_mut_ptr();
+    let q = q.as_mut_ptr();
+    unsafe { core::ptr::swap_nonoverlapping::<T>(p, q, count) };
   }
 
   #[inline(always)]
-  pub unsafe fn drop_in_place<T>(self) {
-    let x = self.as_mut_ptr();
-    unsafe { core::ptr::drop_in_place::<T>(x) }
+  pub unsafe fn drop_in_place<T>(p: Self) {
+    let p = p.as_mut_ptr();
+    unsafe { core::ptr::drop_in_place::<T>(p) }
   }
 
   #[inline(always)]
-  pub const fn as_ptr<T>(self) -> *const T {
+  pub const fn as_const_ptr<T>(self) -> *const T {
     self.0 as *const T
   }
 
@@ -112,7 +146,7 @@ impl ptr {
 
   #[inline(always)]
   pub const fn as_slice_ptr<T>(self, len: usize) -> *const [T] {
-    core::ptr::slice_from_raw_parts(self.as_ptr(), len)
+    core::ptr::slice_from_raw_parts(self.as_const_ptr(), len)
   }
 
   #[inline(always)]
@@ -122,7 +156,7 @@ impl ptr {
 
   #[inline(always)]
   pub const unsafe fn as_ref<'a, T>(self) -> &'a T {
-    let x = self.as_ptr();
+    let x = self.as_const_ptr();
     unsafe { &*x }
   }
 
@@ -144,65 +178,51 @@ impl ptr {
     unsafe { &mut *x }
   }
 
-  #[cfg(feature = "alloc")]
   #[inline(always)]
-  pub unsafe fn alloc(layout: alloc::alloc::Layout) -> Self {
-    Self(unsafe { alloc::alloc::alloc(layout) } as *const ())
-  }
-
-  #[cfg(feature = "alloc")]
-  #[inline(always)]
-  pub unsafe fn alloc_zeroed(layout: alloc::alloc::Layout) -> Self {
-    Self(unsafe { alloc::alloc::alloc_zeroed(layout) } as *const ())
-  }
-
-  #[cfg(feature = "alloc")]
-  #[inline(always)]
-  pub unsafe fn dealloc(x: Self, layout: alloc::alloc::Layout) {
-    let x = x.as_mut_ptr();
-    unsafe { alloc::alloc::dealloc(x, layout) }
+  pub fn as_non_null<T>(self) -> Option<core::ptr::NonNull<T>> {
+    core::ptr::NonNull::new(self.as_mut_ptr())
   }
 }
 
 impl<T: ?Sized> From<*const T> for ptr {
   #[inline(always)]
   fn from(value: *const T) -> Self {
-    Self(value as *const ())
+    Self::from_const_ptr(value)
   }
 }
 
 impl<T: ?Sized> From<*mut T> for ptr {
   #[inline(always)]
   fn from(value: *mut T) -> Self {
-    Self(value as *const T as *const ())
+    Self::from_mut_ptr(value)
   }
 }
 
 impl<T: ?Sized> From<&T> for ptr {
   #[inline(always)]
   fn from(value: &T) -> Self {
-    Self(value as *const T as *const ())
+    Self::from_ref(value)
   }
 }
 
 impl<T: ?Sized> From<&mut T> for ptr {
   #[inline(always)]
   fn from(value: &mut T) -> Self {
-    Self(value as *mut T as *const T as *const ())
+    Self::from_mut_ref(value)
   }
 }
 
 impl<T: ?Sized> From<core::ptr::NonNull<T>> for ptr {
   #[inline(always)]
   fn from(value: core::ptr::NonNull<T>) -> Self {
-    Self(value.as_ptr() as *const T as *const ())
+    Self::from_non_null(value)
   }
 }
 
 impl<T> From<ptr> for *const T {
   #[inline(always)]
   fn from(value: ptr) -> *const T {
-    value.as_ptr()
+    value.as_const_ptr()
   }
 }
 

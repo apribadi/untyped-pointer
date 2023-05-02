@@ -9,7 +9,3 @@ description = "a pointer type without pointee type or mutability information"
 
 [dev-dependencies]
 expect-test = "1.4.0"
-
-[features]
-default = ["alloc"]
-alloc = []
