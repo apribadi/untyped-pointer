@@ -1,5 +1,5 @@
 [package]
-name = "ptr-monotype"
+name = "untyped-pointer"
 version = "0.2.0"
 authors = ["Aaron Pribadi <aaron.pribadi@gmail.com>"]
 license = "Artistic-2.0"

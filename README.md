@@ -1,3 +1,3 @@
-# ptr-monotype
+# untyped-pointer
 
-A pointer type without pointee type or mutability information.
+A pointer type that does not specify a pointee type or mutability.
