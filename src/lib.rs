@@ -28,6 +28,12 @@ impl ptr {
   }
 
   #[inline(always)]
+  pub fn addr(self) -> usize {
+    // NB: not `pub const fn addr`
+    unsafe { core::mem::transmute::<*const (), usize>(self.0) }
+  }
+
+  #[inline(always)]
   pub fn from_const_ptr<T: ?Sized>(p: *const T) -> Self {
     Self(p as *const ())
   }
@@ -39,24 +45,17 @@ impl ptr {
 
   #[inline(always)]
   pub fn from_ref<T: ?Sized>(p: &T) -> Self {
-    Self(p as *const T as *const ())
+    Self::from_const_ptr(p)
   }
 
   #[inline(always)]
   pub fn from_mut_ref<T: ?Sized>(p: &mut T) -> Self {
-    Self(p as *mut T as *const T as *const ())
+    Self::from_mut_ptr(p)
   }
 
   #[inline(always)]
   pub fn from_non_null<T: ?Sized>(p: core::ptr::NonNull<T>) -> Self {
-    Self(p.as_ptr() as *const T as *const ())
-  }
-
-  #[inline(always)]
-  pub fn addr(self) -> usize {
-    // NB: The `addr` method should not be `const`.
-    let p = self.as_const_ptr();
-    unsafe { core::mem::transmute::<*const (), usize>(p) }
+    Self::from_mut_ptr(p.as_ptr())
   }
 
   #[inline(always)]
@@ -66,12 +65,12 @@ impl ptr {
 
   #[inline(always)]
   pub const fn add(self, offset: usize) -> Self {
-    Self(self.as_const_ptr::<u8>().wrapping_add(offset) as *const ())
+    Self((self.0 as *const u8).wrapping_add(offset) as *const ())
   }
 
   #[inline(always)]
   pub const fn sub(self, offset: usize) -> Self {
-    Self(self.as_const_ptr::<u8>().wrapping_sub(offset) as *const ())
+    Self((self.0 as *const u8).wrapping_sub(offset) as *const ())
   }
 
   #[inline(always)]
@@ -145,13 +144,13 @@ impl ptr {
   }
 
   #[inline(always)]
-  pub const fn as_slice_ptr<T>(self, len: usize) -> *const [T] {
+  pub const fn as_slice_const_ptr<T>(self, len: usize) -> *const [T] {
     core::ptr::slice_from_raw_parts(self.as_const_ptr(), len)
   }
 
   #[inline(always)]
   pub const fn as_slice_mut_ptr<T>(self, len: usize) -> *mut [T] {
-    self.as_slice_ptr::<T>(len) as *mut [T]
+    self.as_slice_const_ptr::<T>(len) as *mut [T]
   }
 
   #[inline(always)]
@@ -168,7 +167,7 @@ impl ptr {
 
   #[inline(always)]
   pub const unsafe fn as_slice_ref<'a, T>(self, len: usize) -> &'a [T] {
-    let x = self.as_slice_ptr(len);
+    let x = self.as_slice_const_ptr(len);
     unsafe { &*x }
   }
 
