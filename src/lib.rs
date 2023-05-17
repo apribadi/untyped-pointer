@@ -13,7 +13,7 @@
 
 #[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 #[repr(transparent)]
-pub struct ptr(*const ());
+pub struct ptr(*const u8);
 
 unsafe impl Send for ptr {}
 
@@ -24,27 +24,32 @@ impl ptr {
 
   #[inline(always)]
   pub const fn invalid(addr: usize) -> Self {
-    Self(unsafe { core::mem::transmute::<usize, *const ()>(addr) })
+    Self(unsafe { core::mem::transmute::<usize, *const u8>(addr) })
   }
 
   #[inline(always)]
   pub fn addr(self) -> usize {
     // NB: not `pub const fn addr`
-    unsafe { core::mem::transmute::<*const (), usize>(self.0) }
+    unsafe { core::mem::transmute::<*const u8, usize>(self.0) }
   }
 
   #[inline(always)]
-  pub fn from_const_ptr<T: ?Sized>(p: *const T) -> Self {
-    Self(p as *const ())
+  pub fn is_null(self) -> bool {
+    self.addr() == 0
   }
 
   #[inline(always)]
-  pub fn from_mut_ptr<T: ?Sized>(p: *mut T) -> Self {
-    Self(p as *const T as *const ())
+  pub const fn from_const_ptr<T: ?Sized>(p: *const T) -> Self {
+    Self(p as *const u8)
   }
 
   #[inline(always)]
-  pub fn from_ref<T: ?Sized>(p: &T) -> Self {
+  pub const fn from_mut_ptr<T: ?Sized>(p: *mut T) -> Self {
+    Self(p as *const u8)
+  }
+
+  #[inline(always)]
+  pub const fn from_ref<T: ?Sized>(p: &T) -> Self {
     Self::from_const_ptr(p)
   }
 
@@ -54,23 +59,18 @@ impl ptr {
   }
 
   #[inline(always)]
-  pub fn from_non_null<T: ?Sized>(p: core::ptr::NonNull<T>) -> Self {
+  pub const fn from_non_null<T: ?Sized>(p: core::ptr::NonNull<T>) -> Self {
     Self::from_mut_ptr(p.as_ptr())
   }
 
   #[inline(always)]
-  pub fn is_null(self) -> bool {
-    self.addr() == 0
-  }
-
-  #[inline(always)]
   pub const fn add(self, offset: usize) -> Self {
-    Self((self.0 as *const u8).wrapping_add(offset) as *const ())
+    Self(self.0.wrapping_add(offset))
   }
 
   #[inline(always)]
   pub const fn sub(self, offset: usize) -> Self {
-    Self((self.0 as *const u8).wrapping_sub(offset) as *const ())
+    Self(self.0.wrapping_sub(offset))
   }
 
   #[inline(always)]
@@ -140,7 +140,7 @@ impl ptr {
 
   #[inline(always)]
   pub const fn as_mut_ptr<T>(self) -> *mut T {
-    self.0 as *const T as *mut T
+    self.0 as *mut T
   }
 
   #[inline(always)]
